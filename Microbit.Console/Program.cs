@@ -6,16 +6,16 @@ namespace Microbit.Console
     {
         static void Main(string[] args)
         {
-            //for (int i = 1; i < 11; i++)
-            //{
-            //    UserInfo userinfo = new UserInfo { UserName = "陈亚" + i.ToString(), Password = "123456" };
-            //    RabbitMQWrapper.Publish(userinfo);
-            //}
+            for (int i = 1; i < 5; i++)
+            {
+                UserInfo userinfo = new UserInfo { UserName = "陈亚" + i.ToString(), Password = "123456" };
+                RabbitMQWrapper.Publish(userinfo);
+            }
 
-            //RabbitMQWrapper.Subscribe<UserInfo>(x =>
-            //{
-            //    System.Console.WriteLine(x.UserName);
-            //});
+            RabbitMQWrapper.Subscribe<UserInfo>(x =>
+            {
+                System.Console.WriteLine(x.UserName);
+            });
 
             System.Console.ReadLine();
         }

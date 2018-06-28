@@ -7,7 +7,7 @@ using Microbit.RabbitMQ;
 
 namespace Microbit.Console
 {
-    [RabbitMQEntity(Exchange = "Microbit.Exchange.UserInfo", Queue = "Microbit.Queue.UserInfo", IsProperties = true)]
+    [RabbitMQEntity(Exchange = "Exchange.Microbit.UserInfo", Queue = "Queue.Microbit.UserInfo", IsProperties = true)]
     [Serializable]
     public class UserInfo
     {

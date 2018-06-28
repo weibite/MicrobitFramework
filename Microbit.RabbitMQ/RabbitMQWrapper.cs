@@ -31,38 +31,42 @@ namespace Microbit.RabbitMQ
             }
             catch (Exception ex)
             {
-                Log.Debug(ex.ToString());
+                Log.Error(ex.ToString());
             }
         }
 
+
+
         /// <summary>
-        /// 发布消息
+        /// 发布消息(Direct模式)
         /// </summary>
+        /// <typeparam name="T">对象类型</typeparam>
+        /// <param name="entity">要发送的对象</param>
         public static void Publish<T>(T entity) where T : class
         {
             using (var channel = connection.CreateModel())
             {
                 //获取消息实体所属的交换机和队列
-                string exchange = "Microbit.Exchange.*";
-                string queue = "Microbit.Queue.*";
                 var attr = GetAttributes<T>();
-                if (attr != null)
-                {
-                    exchange = attr.Exchange;
-                    queue = attr.Queue;
-                }
+                string exchange = attr.Exchange;
+                string queue = attr.Queue;
+                
                 //声明交换机
                 channel.ExchangeDeclare(exchange, "direct");
+
                 //声明队列，消息持久化，防止丢失
                 channel.QueueDeclare(queue, true, false, false, null);
+
                 //绑定交换机和队列
                 channel.QueueBind(queue, exchange, queue);
                 var properties = channel.CreateBasicProperties();
                 properties.Persistent = true;
                 properties.DeliveryMode = 2;
+
                 //消息转换为二进制
                 string message = JsonConvert.SerializeObject(entity);
                 var msgBody = Encoding.UTF8.GetBytes(message);
+
                 //发布消息
                 channel.BasicPublish(exchange, queue, properties, msgBody);
             }
@@ -88,18 +92,17 @@ namespace Microbit.RabbitMQ
                     string message = Encoding.UTF8.GetString(body);
                     var obj = JsonConvert.DeserializeObject<T>(message);
                     action(obj);//执行客户端消费事件
+                    // 返回应答状态
+                    channel.BasicAck(args.DeliveryTag, false);
                 }
                 catch (Exception ex)
                 {
-                    Log.Debug(ex.ToString());
-                    //消费失败，重新放入队列头
+                    Log.Error(ex.ToString());
+                    //消费失败，放回队列
                     channel.BasicReject(args.DeliveryTag, true);
                 }
-                finally
-                {
-                    channel.BasicAck(args.DeliveryTag, false);
-                }
             };
+            // 必须等待消费端确认后才能从队列中清除消息
             string consumerTag = channel.BasicConsume(queue, false, consumer);
         }
 
@@ -122,6 +125,7 @@ namespace Microbit.RabbitMQ
                 {
                     try
                     {
+                        throw new Exception();
                         byte[] body = args.Body;
                         string message = Encoding.UTF8.GetString(body);
                         var obj = JsonConvert.DeserializeObject<T>(message);
@@ -129,8 +133,10 @@ namespace Microbit.RabbitMQ
                     }
                     catch (Exception ex)
                     {
-                        Log.Debug(ex.ToString());
-                    }             
+                        Log.Error(ex.ToString());
+                        //消费失败，重新放入队列头
+                        channel.BasicReject(args.DeliveryTag, true);
+                    }
                 });
                 channel.BasicAck(args.DeliveryTag, false);
             };
@@ -147,14 +153,9 @@ namespace Microbit.RabbitMQ
         {
             var channel = connection.CreateModel();
             //获取消息实体所属的交换机和队列
-            string exchange = "Microbit.Exchange.*";
-            queue = "Microbit.Queue.*";
             var attr = GetAttributes<T>();
-            if (attr != null)
-            {
-                exchange = attr.Exchange;
-                queue = attr.Queue;
-            }
+            string exchange = attr.Exchange;
+            queue = attr.Queue;
             //声明队列，消息持久化，防止丢失
             channel.QueueDeclare(queue, true, false, false, null);
             //同时只消费一个消息
@@ -171,6 +172,12 @@ namespace Microbit.RabbitMQ
         {
             var type = typeof(T);
             RabbitMQEntityAttribute attribute = type.GetCustomAttributes(typeof(RabbitMQEntityAttribute), false).FirstOrDefault() as RabbitMQEntityAttribute;
+            if (attribute == null)
+            {
+                attribute = new RabbitMQEntityAttribute();
+                attribute.Exchange = "Exchange." + type.FullName;
+                attribute.Queue = "Queue." + type.FullName;
+            }
             return attribute;
         }
     }
